@@ -14,8 +14,9 @@ type Config struct {
 	ServerLng         float64 `mapstructure:"server_lng"`
 	IPInfoAPIKey      string  `mapstructure:"ipinfo_api_key"`
 
-	StatsPassword string `mapstructure:"statistics_password"`
-	RedactIP      bool   `mapstructure:"redact_ip_addresses"`
+	StatsPassword       string `mapstructure:"statistics_password"`
+	RedactIP            bool   `mapstructure:"redact_ip_addresses"`
+	EnableIDObfuscation bool   `mapstructure:"enable_id_obfuscation"`
 
 	AssetsPath string `mapstructure:"assets_path"`
 
@@ -26,6 +27,9 @@ type Config struct {
 	DatabasePassword string `mapstructure:"database_password"`
 
 	DatabaseFile string `mapstructure:"database_file"`
+	DatabasePort string `mapstructure:"database_port"`
+
+	GeoIPDatabaseFile string `mapstructure:"geoip_database_file"`
 
 	EnableHTTP2 bool   `mapstructure:"enable_http2"`
 	EnableTLS   bool   `mapstructure:"enable_tls"`

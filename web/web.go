@@ -11,7 +11,6 @@ import (
 	"os"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -79,6 +78,8 @@ func ListenAndServe(conf *config.Config) error {
 	r.Post(conf.BaseURL+"/backend/results/telemetry", results.Record)
 	r.HandleFunc(conf.BaseURL+"/stats", results.Stats)
 	r.HandleFunc(conf.BaseURL+"/backend/stats", results.Stats)
+	r.Get(conf.BaseURL+"/results/json", results.JSONResult)
+	r.Get(conf.BaseURL+"/backend/results/json", results.JSONResult)
 
 	// PHP frontend default values compatibility
 	r.HandleFunc(conf.BaseURL+"/empty.php", empty)
@@ -91,6 +92,8 @@ func ListenAndServe(conf *config.Config) error {
 	r.Post(conf.BaseURL+"/backend/results/telemetry.php", results.Record)
 	r.HandleFunc(conf.BaseURL+"/stats.php", results.Stats)
 	r.HandleFunc(conf.BaseURL+"/backend/stats.php", results.Stats)
+	r.Get(conf.BaseURL+"/results/json.php", results.JSONResult)
+	r.Get(conf.BaseURL+"/backend/results/json.php", results.JSONResult)
 
 	go listenProxyProtocol(conf, r)
 
@@ -132,6 +135,16 @@ func pages(fs http.FileSystem, BaseURL string) http.HandlerFunc {
 	return fn
 }
 
+// sendPHPCORSHeaders sets CORS headers matching the PHP backend's ?cors parameter behavior.
+// This is for API compatibility with the PHP version; the global CORS middleware already handles CORS.
+func sendPHPCORSHeaders(w http.ResponseWriter, r *http.Request) {
+	if r.FormValue("cors") == "true" {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Encoding, Content-Type")
+	}
+}
+
 func empty(w http.ResponseWriter, r *http.Request) {
 	_, err := io.Copy(ioutil.Discard, r.Body)
 	if err != nil {
@@ -140,11 +153,13 @@ func empty(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = r.Body.Close()
 
+	sendPHPCORSHeaders(w, r)
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 }
 
 func garbage(w http.ResponseWriter, r *http.Request) {
+	sendPHPCORSHeaders(w, r)
 	w.Header().Set("Content-Description", "File Transfer")
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", "attachment; filename=random.dat")
@@ -180,37 +195,17 @@ func garbage(w http.ResponseWriter, r *http.Request) {
 func getIP(w http.ResponseWriter, r *http.Request) {
 	var ret results.Result
 
-	clientIP := r.RemoteAddr
-	clientIP = strings.ReplaceAll(clientIP, "::ffff:", "")
+	clientIP := getClientIP(r)
 
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil {
-		clientIP = ip
-	}
+	// Add anti-cache headers matching PHP behavior
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0")
+	w.Header().Add("Cache-Control", "post-check=0, pre-check=0")
+	w.Header().Set("Pragma", "no-cache")
 
-	isSpecialIP := true
-	switch {
-	case clientIP == "::1":
-		ret.ProcessedString = clientIP + " - localhost IPv6 access"
-	case strings.HasPrefix(clientIP, "fe80:"):
-		ret.ProcessedString = clientIP + " - link-local IPv6 access"
-	case strings.HasPrefix(clientIP, "127."):
-		ret.ProcessedString = clientIP + " - localhost IPv4 access"
-	case strings.HasPrefix(clientIP, "10."):
-		ret.ProcessedString = clientIP + " - private IPv4 access"
-	case regexp.MustCompile(`^172\.(1[6-9]|2\d|3[01])\.`).MatchString(clientIP):
-		ret.ProcessedString = clientIP + " - private IPv4 access"
-	case strings.HasPrefix(clientIP, "192.168"):
-		ret.ProcessedString = clientIP + " - private IPv4 access"
-	case strings.HasPrefix(clientIP, "169.254"):
-		ret.ProcessedString = clientIP + " - link-local IPv4 access"
-	case regexp.MustCompile(`^100\.([6-9][0-9]|1[0-2][0-7])\.`).MatchString(clientIP):
-		ret.ProcessedString = clientIP + " - CGNAT IPv4 access"
-	default:
-		isSpecialIP = false
-	}
+	sendPHPCORSHeaders(w, r)
 
-	if isSpecialIP {
+	if desc := classifyPrivateIP(clientIP); desc != "" {
+		ret.ProcessedString = clientIP + " - " + desc
 		b, _ := json.Marshal(&ret)
 		if _, err := w.Write(b); err != nil {
 			log.Errorf("Error writing to client: %s", err)
@@ -224,7 +219,7 @@ func getIP(w http.ResponseWriter, r *http.Request) {
 	ret.ProcessedString = clientIP
 
 	if getISPInfo {
-		ispInfo := getIPInfo(clientIP)
+		ispInfo := getISPInfoByPriority(clientIP)
 		ret.RawISPInfo = ispInfo
 
 		removeRegexp := regexp.MustCompile(`AS\d+\s`)

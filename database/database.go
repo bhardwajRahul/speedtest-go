@@ -4,10 +4,12 @@ import (
 	"github.com/librespeed/speedtest-go/config"
 	"github.com/librespeed/speedtest-go/database/bolt"
 	"github.com/librespeed/speedtest-go/database/memory"
+	"github.com/librespeed/speedtest-go/database/mssql"
 	"github.com/librespeed/speedtest-go/database/mysql"
 	"github.com/librespeed/speedtest-go/database/none"
 	"github.com/librespeed/speedtest-go/database/postgresql"
 	"github.com/librespeed/speedtest-go/database/schema"
+	"github.com/librespeed/speedtest-go/database/sqlite"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -30,6 +32,10 @@ func SetDBInfo(conf *config.Config) {
 		DB = mysql.Open(conf.DatabaseHostname, conf.DatabaseUsername, conf.DatabasePassword, conf.DatabaseName)
 	case "bolt":
 		DB = bolt.Open(conf.DatabaseFile)
+	case "sqlite":
+		DB = sqlite.Open(conf.DatabaseFile)
+	case "mssql":
+		DB = mssql.Open(conf.DatabaseHostname, conf.DatabaseUsername, conf.DatabasePassword, conf.DatabaseName, conf.DatabasePort)
 	case "memory":
 		DB = memory.Open("")
 	case "none":

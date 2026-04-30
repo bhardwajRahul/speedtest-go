@@ -20,16 +20,25 @@ Works with mobile versions too.
 * Jitter
 * IP Address, ISP, distance from server (optional)
 * Telemetry (optional)
-* Results sharing (optional)
+* Results sharing via PNG image and JSON API (optional)
 * Multiple Points of Test (optional)
 * Compatible with PHP frontend predefined endpoints (with `.php` suffixes)
-* Supports [Proxy Protocol](https://www.haproxy.org/download/2.3/doc/proxy-protocol.txt) (without TLV support yet)
+* Supports [Proxy Protocol](https://www.haproxy.org/download/2.3/doc/proxy-protocol.txt)
+* Modern and classic UI designs with switchable interface
+* ID obfuscation for test result privacy (optional)
+
+### IP Detection
+* Client IP detection with proxy header chain support (X-Forwarded-For, X-Real-IP, Client-IP, CF-Connecting-IPv6)
+* ISP and location detection via ipinfo.io API with offline GeoIP database fallback (MaxMind .mmdb)
+* Private/special IP detection (including ULA IPv6 and CGNAT)
+* Distance calculation with human-friendly rounding
 
 ![Screencast](https://speedtest.zzz.cat/speedtest.webp)
 
 ## Server requirements
-* Any [Go supported platforms](https://github.com/golang/go/wiki/MinimumRequirements)
-* BoltDB, PostgreSQL or MySQL database to store test results (optional)
+* Any [Go supported platforms](https://github.com/golang/go/wiki/MinimumRequirements) (Go 1.21+)
+* SQLite, BoltDB, PostgreSQL, MySQL or MSSQL database to store test results (optional)
+* No external dependencies — single binary deployment
 * A fast! Internet connection
 
 ## Installation
@@ -47,17 +56,7 @@ Works with mobile versions too.
 You can use an Ansible role for installing speedtest-go easily. You can find the role on the [Ansible galaxy](https://galaxy.ansible.com/flymia/ansible_speedtest_go). There is a [separate repository](https://github.com/flymia/ansible-speedtest_go) for documentation about the Ansible role.
 ### Compile from source
 
-You need Go 1.16+ to compile the binary. If you have an older version of Go and don't want to install the tarball
-manually, you can install newer version of Go into your `GOPATH`:
-
-0. Install Go 1.17
-
-   ```
-   $ go get golang.org/dl/go1.17.1
-   # Assuming your GOPATH is default (~/go), Go 1.17.1 will be installed in ~/go/bin
-   $ ~/go/bin/go1.17.1 version
-   go version go1.17.1 linux/amd64
-   ```
+You need Go 1.21+ to compile the binary.
 
 1. Clone this repository:
 
@@ -76,18 +75,20 @@ manually, you can install newer version of Go into your `GOPATH`:
 3. Copy the `assets` directory, `settings.toml` file along with the compiled `speedtest` binary into a single directory
 
 4. If you have telemetry enabled,
-    - For PostgreSQL/MySQL, create database and import the corresponding `.sql` file under `database/{postgresql,mysql}`
+    - For PostgreSQL/MySQL/MSSQL, create database and import the corresponding `.sql` file under `database/{postgresql,mysql,mssql}`
 
         ```
         # assume you have already created a database named `speedtest` under current user
         $ psql speedtest < database/postgresql/telemetry_postgresql.sql
         ```
 
-    - For embedded BoltDB, make sure to define the `database_file` path in `settings.toml`:
+    - For embedded databases (BoltDB, SQLite), make sure to define the `database_file` path in `settings.toml`:
 
         ```
         database_file="speedtest.db"
         ```
+
+    - SQLite supports WAL mode for better concurrent performance and works out of the box with no additional dependencies.
 
 5. Put `assets` folder under the same directory as your compiled binary.
     - Make sure the font files and JavaScripts are in the `assets` directory
@@ -119,7 +120,7 @@ manually, you can install newer version of Go into your `GOPATH`:
     # redact IP addresses
     redact_ip_addresses=false
 
-    # database type for statistics data, currently supports: none, memory, bolt, mysql, postgresql
+    # database type for statistics data, currently supports: none, memory, bolt, sqlite, mysql, postgresql, mssql
     # if none is specified, no telemetry/stats will be recorded, and no result PNG will be generated
     database_type="postgresql"
     database_hostname="localhost"
@@ -127,8 +128,15 @@ manually, you can install newer version of Go into your `GOPATH`:
     database_username="postgres"
     database_password=""
 
-    # if you use `bolt` as database, set database_file to database file location
+    # database port (optional, defaults to driver default; only used by mssql)
+    database_port=""
+
+    # if you use `bolt` or `sqlite` as database, set database_file to database file location
     database_file="speedtest.db"
+
+    # GeoIP offline database (.mmdb format) for ISP detection fallback (optional)
+    # Leave empty to disable.
+    # geoip_database_file="country_asn.mmdb"
 
     # TLS and HTTP/2 settings. TLS is required for HTTP/2
     enable_tls=false
@@ -141,11 +149,11 @@ manually, you can install newer version of Go into your `GOPATH`:
 
 ## Differences between Go and PHP implementation and caveats
 
-- Since there is no CGo-free SQLite implementation available, I've opted to use [BoltDB](https://github.com/etcd-io/bbolt)
-  instead, as an embedded database alternative to SQLite
-- Test IDs are generated ULID, there is no option to change them to plain ID
-- You can use the same HTML template from the PHP implementation
-- Server location can be defined in settings
+- Test IDs are generated as ULID (Universally Unique Lexicographically Sortable Identifier), unlike the PHP version's auto-increment integer IDs
+- ID obfuscation is available as an optional feature — when enabled, ULIDs are obfuscated with a per-instance salt
+- The Go version ships with two built-in UI designs (classic gauges and modern CSS), switchable via `?design=new` URL parameter
+- The modern design (`index-modern.html`) supports multi-server configuration via `server-list.json` placed alongside the binary
+- Server location can be defined in settings or auto-detected at startup
 - There might be a slight delay on program start if your Internet connection is slow. That's because the program will
 attempt to fetch your current network's ISP info for distance calculation between your network and the speed test client's.
 This action will only be taken once, and cached for later use.

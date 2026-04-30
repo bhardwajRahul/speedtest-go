@@ -201,7 +201,12 @@ func Record(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := w.Write([]byte("id " + uuid.String())); err != nil {
+	responseID := uuid.String()
+	if config.LoadedConfig().EnableIDObfuscation {
+		responseID = ObfuscateULID(uuid.String())
+	}
+
+	if _, err := w.Write([]byte("id " + responseID)); err != nil {
 		log.Errorf("Error writing ID to telemetry request: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -214,7 +219,8 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uuid := r.FormValue("id")
+	rawID := r.FormValue("id")
+	uuid := ResolveID(rawID)
 	record, err := database.DB.FetchByUUID(uuid)
 	if err != nil {
 		log.Errorf("Error querying database: %s", err)
