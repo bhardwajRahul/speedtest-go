@@ -1,3 +1,4 @@
+version: 2
 project_name: 'speedtest-go'
 #dist: ./out
 before:
@@ -100,7 +101,7 @@ builds:
 archives:
   - format_overrides:
       - goos: windows
-        format: zip
+        formats: zip
     files:
       - README.md
       - LICENSE
@@ -108,7 +109,7 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 changelog:
-  skip: false
+  disable: false
   sort: asc
 release:
   github:
