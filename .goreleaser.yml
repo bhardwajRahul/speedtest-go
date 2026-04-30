@@ -51,19 +51,6 @@ builds:
       - amd64
       - arm64
   - main: ./main.go
-    id: speedtest-backend-noupx-linux
-    binary: speedtest-backend
-    env:
-      - CGO_ENABLED=0
-    flags:
-      - -trimpath
-    ldflags:
-      - -w -s
-    goos:
-      - linux
-    goarch:
-      - mips64le
-  - main: ./main.go
     id: speedtest-backend-noupx-windows-arm64
     binary: speedtest-backend
     env:
