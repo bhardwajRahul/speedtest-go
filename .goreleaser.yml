@@ -62,13 +62,7 @@ builds:
     goos:
       - linux
     goarch:
-      - mips
-      - mipsle
-      - mips64
       - mips64le
-    gomips:
-      - hardfloat
-      - softfloat
   - main: ./main.go
     id: speedtest-backend-noupx-windows-arm64
     binary: speedtest-backend
